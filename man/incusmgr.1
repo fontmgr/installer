@@ -1,0 +1,403 @@
+.\" Manpage for incusmgr
+.TH man 1 "20 February 2026" "202602200031-git" "incusmgr"
+
+.SH NAME
+incusmgr \- Comprehensive Incus container and VM management tool
+
+.SH DESCRIPTION
+A powerful command-line tool for managing Incus containers and virtual machines. Provides lifecycle management, storage pool operations, network configuration, profile management, image operations, and system cleanup utilities.
+
+.SH SYNOPSIS
+incusmgr [options] [command] [arguments...]
+
+.SH CONTAINER/VM MANAGEMENT COMMANDS
+.TP
+.B run <image>
+Launch an Incus container from the specified image
+.TP
+.B launch <image> <name>
+Launch and name an Incus container or VM
+.TP
+.B exec <instance> <command>
+Execute a command in a running instance
+.TP
+.B enter <instance>
+Enter an instance with an interactive shell
+.TP
+.B shell <instance>
+Open shell in instance (alias for enter)
+.TP
+.B stop <instance>
+Stop a running instance
+.TP
+.B start <instance>
+Start a stopped instance
+.TP
+.B restart <instance>
+Restart an instance
+.TP
+.B delete <instance>
+Delete an instance (supports --force flag)
+.TP
+.B list [filter]
+List instances with optional filtering
+.TP
+.B info <instance>
+Show detailed information about an instance
+.TP
+.B rename <old> <new>
+Rename an instance
+.TP
+.B snapshot <instance> [name]
+Create a snapshot of an instance
+.TP
+.B restore <instance> <snapshot>
+Restore instance from snapshot
+
+.SH SYSTEM MANAGEMENT COMMANDS
+.TP
+.B init [force]
+Initialize incusmgr configuration and Incus environment
+.TP
+.B status
+Show Incus daemon status and system information
+.TP
+.B version
+Show Incus version information
+
+.SH STORAGE COMMANDS
+.TP
+.B storage list
+List all storage pools
+.TP
+.B storage create <name>
+Create a new storage pool
+.TP
+.B storage delete <name>
+Delete a storage pool
+.TP
+.B storage show <name>
+Show detailed storage pool information
+
+.SH NETWORK COMMANDS
+.TP
+.B network list
+List all networks
+.TP
+.B network create <name>
+Create a new network
+.TP
+.B network delete <name>
+Delete a network
+.TP
+.B network show [name]
+Show network details and instance IPs (default: incusbr0)
+
+.SH PROFILE COMMANDS
+.TP
+.B profile list
+List all profiles
+.TP
+.B profile show <name>
+Show profile configuration
+.TP
+.B profile create <name>
+Create a new profile
+.TP
+.B profile delete <name>
+Delete a profile
+
+.SH IMAGE MANAGEMENT COMMANDS
+.TP
+.B image list [remote:]
+List available images from local or remote sources
+.TP
+.B image info <image>
+Show detailed image information
+.TP
+.B image delete <image>
+Delete an image
+.TP
+.B image copy <src> <dst>
+Copy image between remotes
+
+.SH REMOTE MANAGEMENT COMMANDS
+.TP
+.B remote list
+List configured remote servers
+.TP
+.B remote add <name> <url>
+Add a remote Incus server
+.TP
+.B remote remove <name>
+Remove a remote server
+
+.SH CLEANUP COMMANDS
+.TP
+.B prune
+Clean up stopped instances and unused volumes (default: all)
+.TP
+.B prune instances
+Remove all stopped instances
+.TP
+.B prune volumes
+Remove unused storage volumes
+.TP
+.B prune images
+Remove unused images
+.TP
+.B prune all
+Comprehensive cleanup - removes instances, volumes, and images
+
+.SH OPTIONS
+.TP
+.B \-\-force
+Force operations, bypass safety checks
+.TP
+.B \-\-help
+Display comprehensive help message
+.TP
+.B \-\-version
+Display current version and information
+.TP
+.B \-\-config
+Generate user configuration file
+.TP
+.B \-\-options
+Show all available options
+.TP
+.B \-\-debug
+Enable debugging output
+.TP
+.B \-\-raw
+Remove all formatting from output
+
+.SH EXAMPLES
+.TP
+.B incusmgr init
+Initialize Incus environment and configuration
+.TP
+.B incusmgr launch ubuntu:22.04 mycontainer
+Launch Ubuntu 22.04 container named 'mycontainer'
+.TP
+.B incusmgr list
+Show all instances
+.TP
+.B incusmgr enter mycontainer
+Enter 'mycontainer' with interactive shell
+.TP
+.B incusmgr stop mycontainer
+Stop the running container
+.TP
+.B incusmgr snapshot mycontainer snap1
+Create snapshot 'snap1' of 'mycontainer'
+.TP
+.B incusmgr restore mycontainer snap1
+Restore 'mycontainer' from snapshot 'snap1'
+.TP
+.B incusmgr storage list
+List all storage pools
+.TP
+.B incusmgr network show incusbr0
+Show network details and connected instances
+.TP
+.B incusmgr profile show default
+Show default profile configuration
+.TP
+.B incusmgr image list images:
+List all available images from images remote
+.TP
+.B incusmgr remote add myserver https://incus.example.com:8443
+Add a remote Incus server
+.TP
+.B incusmgr prune all
+Remove all instances, unused volumes, and images
+.TP
+.B incusmgr delete mycontainer --force
+Force delete an instance
+
+.SH STORAGE MANAGEMENT
+incusmgr provides comprehensive storage pool management:
+.TP
+.B Default Storage
+Uses 'default' storage pool by default
+.TP
+.B Storage Drivers
+Supports all Incus storage drivers (dir, zfs, btrfs, lvm, ceph)
+.TP
+.B Volume Management
+Create and manage custom storage volumes
+.TP
+.B Cleanup Operations
+Smart cleanup removes only unused volumes, preserves active data
+
+.SH NETWORK MANAGEMENT
+.TP
+.B Default Network
+Uses 'incusbr0' bridge network by default
+.TP
+.B Network Types
+Supports bridge, macvlan, sriov, ovn, and physical networks
+.TP
+.B DHCP Integration
+Automatic DHCP for bridge networks
+.TP
+.B IP Information
+View instance IP addresses and network assignments
+
+.SH PROFILE MANAGEMENT
+.TP
+.B Default Profile
+Uses 'default' profile for new instances
+.TP
+.B Custom Profiles
+Create profiles for different workloads
+.TP
+.B Device Configuration
+Configure storage, network, and device settings
+.TP
+.B Resource Limits
+Set CPU, memory, and disk limits per profile
+
+.SH IMAGE SOURCES
+.TP
+.B images:
+Official LXC image repository (Ubuntu, Debian, Alpine, etc.)
+.TP
+.B ubuntu:
+Ubuntu official image server
+.TP
+.B ubuntu-daily:
+Ubuntu daily build images
+.TP
+.B Local Images
+Cached images stored on local system
+
+.SH SNAPSHOT MANAGEMENT
+.TP
+.B Point-in-Time Snapshots
+Create instant snapshots of running instances
+.TP
+.B Quick Restore
+Restore instances to previous states
+.TP
+.B Snapshot Storage
+Snapshots use efficient storage with copy-on-write
+.TP
+.B Snapshot Lifecycle
+Manage snapshot retention and cleanup
+
+.SH CONFIGURATION
+.TP
+.B Default Storage Pool
+Configurable via INCUSMGR_DEFAULT_STORAGE
+.TP
+.B Default Network
+Configurable via INCUSMGR_DEFAULT_NETWORK
+.TP
+.B Default Profile
+Configurable via INCUSMGR_DEFAULT_PROFILE
+
+.SH FILES
+.TP
+.I ~/.config/myscripts/incusmgr/settings.conf
+User configuration file with defaults
+.TP
+.I ~/.local/log/incusmgr/
+Log directory for operations
+.TP
+.I ~/.cache/incusmgr/
+Cache directory for temporary data
+
+.SH ENVIRONMENT VARIABLES
+.TP
+.B INCUSMGR_INCUS_BIN
+Incus command to use (default: incus)
+.TP
+.B INCUSMGR_DEFAULT_STORAGE
+Default storage pool (default: default)
+.TP
+.B INCUSMGR_DEFAULT_NETWORK
+Default network (default: incusbr0)
+.TP
+.B INCUSMGR_DEFAULT_PROFILE
+Default profile (default: default)
+
+.SH PRUNE OPERATIONS
+incusmgr's prune commands intelligently clean up resources:
+.TP
+.B Pre-Check Validation
+Checks if resources exist before attempting removal
+.TP
+.B Safe Cleanup
+Only removes what can be safely deleted
+.TP
+.B Progress Reporting
+Shows detailed progress during cleanup operations
+.TP
+.B Selective Cleanup
+Choose to prune instances, volumes, or images individually
+.TP
+.B Comprehensive Mode
+Use 'prune all' for complete system cleanup
+
+.SH SECURITY CONSIDERATIONS
+.TP
+.B Unprivileged Containers
+Runs unprivileged containers by default for security
+.TP
+.B User Namespaces
+Isolates container processes from host
+.TP
+.B AppArmor/SELinux
+Supports mandatory access control systems
+.TP
+.B Resource Limits
+Enforces CPU, memory, and disk limits
+.TP
+.B Network Isolation
+Containers isolated on separate network bridges
+
+.SH REQUIREMENTS
+.TP
+.B Incus
+Incus must be installed and initialized
+.TP
+.B Storage Backend
+Requires configured storage pool (dir, zfs, btrfs, lvm)
+.TP
+.B Network Configuration
+Requires network bridge for container networking
+.TP
+.B Sufficient Resources
+Adequate CPU, memory, and disk space for containers
+
+.SH CONTAINER VS VM
+Incus supports both system containers and virtual machines:
+.TP
+.B System Containers
+Lightweight, fast boot, shared kernel
+.TP
+.B Virtual Machines
+Full isolation, separate kernel, hardware emulation
+.TP
+.B Mixed Environments
+Run both containers and VMs on same host
+
+.SH NOTES
+incusmgr simplifies Incus container and VM management by providing a consistent interface for common operations. It includes smart cleanup utilities that check before removing resources, comprehensive storage and network management, and support for advanced features like snapshots and profiles.
+
+.SH LICENSE
+WTFPL
+
+.SH BUGS
+No known bugs.
+
+.SH REPORTING BUGS
+https://github.com/casjay-dotfiles/issues
+
+.SH AUTHOR
+Currently maintained by Jason Hempstead <jason@casjaysdev.pro>
+
+.SH SEE ALSO
+incus(1), lxc(1), dockermgr(1), virtmgr(1)
