@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202608311420-git
+##@Version           :  202609072355-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  jason@casjaysdev.pro
 # @@License          :  WTFPL
@@ -10,7 +10,7 @@
 # @@Created          :  Saturday, Sep 14, 2024 14:03 EDT
 # @@File             :  setupmgr
 # @@Description      :  Cross-platform binary/package installation manager - supports Linux, macOS, BSD, Solaris
-# @@Changelog        :  Fix script-lint violations - grep -- separators, comment placement, line length, __requiresudo rename
+# @@Changelog        :  Keep npm global binaries out of /usr/bin
 # @@TODO             :  Better documentation
 # @@Other            :
 # @@Resource         :
@@ -21,7 +21,7 @@
 # shellcheck disable=SC1001,SC1003,SC2001,SC2003,SC2016,SC2031,SC2090,SC2115,SC2120,SC2155,SC2199,SC2229,SC2317,SC2329
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 APPNAME="${0##*/}"
-VERSION="202608311420-git"
+VERSION="202609072355-git"
 USER="${SUDO_USER:-$USER}"
 RUN_USER="${RUN_USER:-$USER}"
 # When invoked via sudo, $HOME points at /root by default. Re-anchor it on
@@ -365,9 +365,9 @@ __help() {
   __printf_line "Supported Architectures: x86_64 (amd64), aarch64 (arm64), armv7 (arm), armv6"
   __printf_line ""
   __printf_line "Package Installation Commands:"
-  __printf_line "act,aichat,aider,asdf,atuin,bat,bob,broot,bun,caddy,coder,ctop,delta,deno,devbox,direnv,distrobox,dive"
+  __printf_line "9router,act,aichat,aider,asdf,atuin,bat,bob,broot,bun,caddy,coder,ctop,delta,deno,devbox,direnv,distrobox,dive"
   __printf_line "dotnet,dust,exa,fabric,fastfetch,fd,fnm,fzf,garage,gemini,gh,glow,go,gohttpserver"
-  __printf_line "gpt,gvm,helm,helix,hyperfine,incus,jekyll,jless,just,k9s,kind,kubectl,lapce,lazydocker"
+  __printf_line "crush,gpt,gvm,helm,helix,hyperfine,incus,jekyll,jless,just,k9s,kind,kimchi,kubectl,lapce,lazydocker"
   __printf_line "lazygit,lima,llama-cpp,llm,localai,lua,mc,markdownlint,minikube,mods,nix,nodejs,nvm,ollama"
   __printf_line "opencode,opentofu,packer,plandex,pipx,powershell,procs,rbenv,ripgrep,ruff,rustfs,rustup,rvm"
   __printf_line "droast,hadolint,shellcheck,shfmt,speedtest,starship,tokei,traefik,uv,vagrant,vale,vfox"
@@ -681,56 +681,44 @@ __npm_install_global() {
   fi
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
+__npm_global_prefix() {
+  local bin_dir="${SETUPMGR_DEFAULT_BIN_DIR:-}"
+  case "${bin_dir%/}" in
+  /usr/local/bin)
+    printf '%s\n' "/usr/local"
+    return
+    ;;
+  "$HOME/.local/bin")
+    printf '%s\n' "$HOME/.local"
+    return
+    ;;
+  esac
+  printf '%s\n' "${NPM_PACKAGES:-$HOME/.local/share/nodejs/modules}"
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+__npm_global_install() {
+  local package="$1"
+  local npm_prefix="$2"
+
+  if [ "$npm_prefix" = "/usr/local" ]; then
+    if [ -w "$npm_prefix" ]; then
+      env NPM_CONFIG_PREFIX="$npm_prefix" npm install -g "$package" --silent --no-progress >/dev/null 2>&1 || return 1
+    elif __can_i_sudo; then
+      __sudo env NPM_CONFIG_PREFIX="$npm_prefix" npm install -g "$package" --silent --no-progress >/dev/null 2>&1 || return 1
+    else
+      return 1
+    fi
+  else
+    __user_mkdir "$npm_prefix"
+    __run_as_user env NPM_CONFIG_PREFIX="$npm_prefix" npm install -g "$package" --silent --no-progress >/dev/null 2>&1 || return 1
+  fi
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - -
 __execute_npm() {
   local name="$1"
   local package="$2"
-  
-  # Check if npm is installed
-  if ! __cmd_exists npm; then
-    printf_red "npm is not installed"
-    return 1
-  fi
 
-  # Show status based on whether tool exists
-  if __cmd_exists "$name"; then
-    printf_green "Updating $name to latest version"
-  else
-    printf_green "Installing $name (latest version)"
-  fi
-  
-  # Determine if we need sudo for global install
-  local npm_root="$(npm root -g 2>/dev/null)"
-  local needs_sudo=false
-  
-  if [ -n "$npm_root" ] && [ ! -w "$npm_root" ] && __can_i_sudo; then
-    needs_sudo=true
-  fi
-  
-  # Install/update package globally
-  local install_dir=""
-  local install_ok=false
-  if [ "$needs_sudo" = true ]; then
-    install_dir="$npm_root"
-    __sudo npm install -g "$package" >/dev/null 2>&1 && install_ok=true
-  elif [ -n "$npm_root" ] && [ -w "$npm_root" ]; then
-    install_dir="$npm_root"
-    npm install -g "$package" >/dev/null 2>&1 && install_ok=true
-  else
-    # User-prefix install — must run as the target user so the cache and
-    # the prefix tree are owned correctly. ~/.profile already sets
-    # NPM_PACKAGES; honor it when present.
-    local user_prefix="${NPM_PACKAGES:-$HOME/.local/share/nodejs/modules}"
-    install_dir="$user_prefix"
-    __user_mkdir "$user_prefix"
-    __run_as_user env NPM_CONFIG_PREFIX="$user_prefix" npm install -g "$package" >/dev/null 2>&1 \
-      && install_ok=true
-  fi
-
-  if [ "$install_ok" = true ]; then
-    __message_installed_ok "$name" "$install_dir"
-  else
-    __message_installed_failed "$name"
-  fi
+  __install_from_npm "$name" "$package"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __is_npm_package() {
@@ -742,11 +730,25 @@ __is_npm_package() {
 __remove_npm_global() {
   local pkg="$1"
   __cmd_exists npm || return 1
-  local npm_root="$(npm root -g 2>/dev/null)"
-  if [ -n "$npm_root" ] && [ ! -w "$npm_root" ] && __can_i_sudo; then
-    __sudo npm uninstall -g "$pkg" >/dev/null 2>&1
+
+  local npm_prefix="$(__npm_global_prefix)"
+  local remove_ok=false
+  if env NPM_CONFIG_PREFIX="$npm_prefix" npm uninstall -g "$pkg" >/dev/null 2>&1; then
+    remove_ok=true
+  fi
+  for npm_prefix in /usr/local /usr; do
+    if [ -d "$npm_prefix/lib/node_modules/$pkg" ]; then
+      if [ -w "$npm_prefix/lib/node_modules" ]; then
+        env NPM_CONFIG_PREFIX="$npm_prefix" npm uninstall -g "$pkg" >/dev/null 2>&1 && remove_ok=true
+      elif __can_i_sudo; then
+        __sudo env NPM_CONFIG_PREFIX="$npm_prefix" npm uninstall -g "$pkg" >/dev/null 2>&1 && remove_ok=true
+      fi
+    fi
+  done
+  if [ "$remove_ok" = true ]; then
+    return 0
   else
-    npm uninstall -g "$pkg" >/dev/null 2>&1
+    return 1
   fi
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2309,37 +2311,9 @@ __install_from_npm() {
     printf_green "Installing $name (latest version)"
   fi
   
-  # Determine if we need sudo for global install
-  # Check if destination is writable or if we can sudo
-  local npm_root="$(npm root -g 2>/dev/null)"
-  local needs_sudo=false
-  
-  if [ -n "$npm_root" ] && [ ! -w "$npm_root" ] && __can_i_sudo; then
-    needs_sudo=true
-  fi
-  
-  # Install/update package globally
-  local install_dir=""
-  local install_ok=false
-  if [ "$needs_sudo" = true ]; then
-    install_dir="$npm_root"
-    __sudo npm install -g "$package" >/dev/null 2>&1 && install_ok=true
-  elif [ -n "$npm_root" ] && [ -w "$npm_root" ]; then
-    install_dir="$npm_root"
-    npm install -g "$package" >/dev/null 2>&1 && install_ok=true
-  else
-    # User-prefix install — drop to the target user so the cache and prefix
-    # tree are owned correctly. ~/.profile already sets NPM_PACKAGES; honor
-    # it when present.
-    local user_prefix="${NPM_PACKAGES:-$HOME/.local/share/nodejs/modules}"
-    install_dir="$user_prefix"
-    __user_mkdir "$user_prefix"
-    __run_as_user env NPM_CONFIG_PREFIX="$user_prefix" npm install -g "$package" >/dev/null 2>&1 \
-      && install_ok=true
-  fi
-
-  if [ "$install_ok" = true ]; then
-    __message_installed_ok "$name" "$install_dir"
+  local npm_prefix="$(__npm_global_prefix)"
+  if __npm_global_install "$package" "$npm_prefix"; then
+    __message_installed_ok "$name" "$npm_prefix/bin"
   else
     exitCode=1
     __message_installed_failed "$name"
@@ -2655,7 +2629,11 @@ __remove_package() {
     __remove_file "$SETUPMGR_DEFAULT_BIN_DIR/ollama"
     [ -d "/usr/local/share/ollama" ] && __sudo rm -rf "/usr/local/share/ollama" && printf_green "Removed ollama from /usr/local/share/ollama"
     ;;
-  openclaw | codex | cortex | gemini | vercel | prettier | eslint | npm-check-updates | markdownlint)
+  codex)
+    __remove_file "$SETUPMGR_DEFAULT_BIN_DIR/codex"
+    __remove_file "/usr/local/bin/codex"
+    ;;
+  9router | openclaw | cortex | gemini | vercel | prettier | eslint | npm-check-updates | markdownlint)
     if __remove_npm_global "$name"; then
       printf_green "Removed $name (npm global)"
     else
@@ -2958,6 +2936,67 @@ __setup_copilot() {
     exitCode=1
   fi
   return $exitCode
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+__setup_crush() {
+  local crush_os=""
+  local crush_arch=""
+  case "$(__get_system_os)" in
+  linux) crush_os="Linux" ;;
+  darwin) crush_os="Darwin" ;;
+  *)
+    printf_red "Unsupported operating system for crush: $(uname -s)"
+    return 1
+    ;;
+  esac
+  case "$(__get_system_arch)" in
+  amd64) crush_arch="x86_64" ;;
+  arm64) crush_arch="arm64" ;;
+  *)
+    printf_red "Unsupported architecture for crush: $(uname -m)"
+    return 1
+    ;;
+  esac
+  __install_from_archive "crush" "charmbracelet/crush" "$SETUPMGR_DEFAULT_BIN_DIR" \
+    "crush_.*_${crush_os}_${crush_arch}\\.tar\\.gz$"
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+__setup_kimchi() {
+  local kimchi_os=""
+  local kimchi_arch=""
+  case "$(__get_system_os)" in
+  linux) kimchi_os="linux" ;;
+  darwin) kimchi_os="darwin" ;;
+  *)
+    printf_red "Unsupported operating system for kimchi: $(uname -s)"
+    return 1
+    ;;
+  esac
+  case "$(__get_system_arch)" in
+  amd64) kimchi_arch="amd64" ;;
+  arm64) kimchi_arch="arm64" ;;
+  *)
+    printf_red "Unsupported architecture for kimchi: $(uname -m)"
+    return 1
+    ;;
+  esac
+  __install_from_archive "kimchi" "getkimchi/kimchi" "$SETUPMGR_DEFAULT_BIN_DIR" \
+    "kimchi_${kimchi_os}_${kimchi_arch}\\.tar\\.gz$" "github" "bin/kimchi"
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+__setup_codex() {
+  local codex_arch=""
+  case "$(uname -m)" in
+  x86_64) codex_arch="x86_64" ;;
+  aarch64 | arm64) codex_arch="aarch64" ;;
+  *)
+    printf_red "Unsupported architecture for codex: $(uname -m)"
+    return 1
+    ;;
+  esac
+  __install_from_archive "codex" "openai/codex" "$SETUPMGR_DEFAULT_BIN_DIR" \
+    "codex-${codex_arch}-unknown-linux-musl\\.tar\\.gz$" "github" \
+    "codex-${codex_arch}-unknown-linux-musl"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __setup_ripgrep() {
@@ -4628,7 +4667,17 @@ __setup_gh() {
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __setup_opencode() {
-  __install_from_archive "opencode" "sst/opencode" "$SETUPMGR_DEFAULT_BIN_DIR"
+  local opencode_arch=""
+  case "$(uname -m)" in
+  x86_64) opencode_arch="x64" ;;
+  aarch64 | arm64) opencode_arch="arm64" ;;
+  *)
+    printf_red "Unsupported architecture for opencode: $(uname -m)"
+    return 1
+    ;;
+  esac
+  __install_from_archive "opencode" "anomalyco/opencode" "$SETUPMGR_DEFAULT_BIN_DIR" \
+    "opencode-linux-${opencode_arch}\\.tar\\.gz$"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __setup_lima() {
@@ -6692,11 +6741,11 @@ if [ -z "$SETUPMGR_DEFAULT_SHARE_DIR" ]; then
 fi
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 SETUPMGR_ALL_TOOLS_DEFAULT=""
-SETUPMGR_ALL_TOOLS_DEFAULT+="act age aichat aider ali antigravity asdf atuin bandwhich bat bob bombardier bottom broot btop buf bun caddy coder cody continue cosign ctlptl "
+SETUPMGR_ALL_TOOLS_DEFAULT+="9router act age aichat aider ali antigravity asdf atuin bandwhich bat bob bombardier bottom broot btop buf bun caddy coder cody continue cosign ctlptl "
 SETUPMGR_ALL_TOOLS_DEFAULT+="ctop curlie dasel delta deno devbox difftastic direnv dive dnsglobe dog dotnet droast dua duf dust earthly evans exa eza fabric fastfetch fd fnm "
 SETUPMGR_ALL_TOOLS_DEFAULT+="fzf fx garage gh ghz git-cliff gitleaks gitui glow go gohttpserver gpt grex gron grype grpcurl gvm hadolint helix helm htmlq httpie hyperfine "
 SETUPMGR_ALL_TOOLS_DEFAULT+="incus jekyll jless jnv jq just k6 k9s kind kompose kubectl kubectx kubens lapce lazydocker lazygit lf lima llama-cpp llm localai lsd lua mc "
-SETUPMGR_ALL_TOOLS_DEFAULT+="miller mise minikube mods nix nodejs nushell nvm oha ollama opencode opentofu packer pipx plandex powershell procs rbenv ripgrep ruff rustfs "
+SETUPMGR_ALL_TOOLS_DEFAULT+="crush kimchi miller mise minikube mods nix nodejs nushell nvm oha ollama opencode opentofu packer pipx plandex powershell procs rbenv ripgrep ruff rustfs "
 SETUPMGR_ALL_TOOLS_DEFAULT+="rustup rvm sd shellcheck shfmt skaffold sops speedtest sq starship stern syft tabby task terminal-browser tgpt tilt tldr tokei traefik "
 SETUPMGR_ALL_TOOLS_DEFAULT+="trufflehog trivy uv vagrant vale vegeta vfox viddy watchexec webhookd xcaddy xh xsv yq zed zellij zig zoxide"
 SETUPMGR_ALL_TOOLS="${SETUPMGR_ALL_TOOLS:-$SETUPMGR_ALL_TOOLS_DEFAULT}"
@@ -6841,8 +6890,8 @@ GET_OPTIONS_YES="yes-*"
 LONGOPTS="completions:,config,reset-config,configure,debug,dir:,help,options,no-color,version,silent,force,"
 LONGOPTS+="system,all,$GET_OPTIONS_NO,$GET_OPTIONS_YES"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-ARRAY="act,aichat,asdf,bat,bob,bun,caddy,coder,delta,deno,devbox,direnv,distrobox,dotnet,dust,exa,fabric,fastfetch,fd,fnm,fzf,garage,gh,glow,go,gohttpserver,"
-ARRAY+="gpt,gvm,helm,incus,jekyll,jless,just,kind,kubectl,lapce,lazydocker,lazygit,lima,llama-cpp,llm,lua,mc,minikube,mods,nix,nodejs,nvm,ollama,opencode,opentofu,"
+ARRAY="9router,act,aichat,asdf,bat,bob,bun,caddy,coder,delta,deno,devbox,direnv,distrobox,dotnet,dust,exa,fabric,fastfetch,fd,fnm,fzf,garage,gh,glow,go,gohttpserver,"
+ARRAY+="crush,gpt,gvm,helm,incus,jekyll,jless,just,kind,kimchi,kubectl,lapce,lazydocker,lazygit,lima,llama-cpp,llm,lua,mc,minikube,mods,nix,nodejs,nvm,ollama,opencode,opentofu,"
 ARRAY+="packer,pipx,powershell,procs,rbenv,remove,ripgrep,ruff,rustfs,rvm,speedtest,starship,tokei,traefik,uv,vagrant,vfox,webhookd,yq,zed,zoxide,"
 ARRAY+="claude,copilot,codex,openclaw,vercel,prettier,eslint,npm-check-updates"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -7058,6 +7107,11 @@ while [ $# -gt 0 ]; do
     continue
   fi
   case "$1" in
+  9router)
+    shift 1
+    __execute_npm "9router" "9router"
+    SETUPMGR_EXIT_STATUS=$?
+    ;;
   claude)
     shift 1
     __setup_claude
@@ -7065,12 +7119,22 @@ while [ $# -gt 0 ]; do
     ;;
   codex)
     shift 1
-    __execute_npm "codex" "codex-cli"
+    __setup_codex
     SETUPMGR_EXIT_STATUS=$?
     ;;
   copilot)
     shift 1
     __setup_copilot
+    SETUPMGR_EXIT_STATUS=$?
+    ;;
+  crush)
+    shift 1
+    __setup_crush
+    SETUPMGR_EXIT_STATUS=$?
+    ;;
+  kimchi)
+    shift 1
+    __setup_kimchi
     SETUPMGR_EXIT_STATUS=$?
     ;;
   openclaw)
